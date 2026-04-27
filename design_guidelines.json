@@ -1,0 +1,153 @@
+{
+  "project": {
+    "name": "Let's Snog",
+    "domain": "letssnog.co.uk",
+    "description": "The cheeky, London-first dating app fixing frustrations with Tinder/Bumble. Smart matches, speed-dating events, and real organised dates.",
+    "theme": "dark",
+    "archetype": "Jewel & Luxury + Electric Neon (Archetype 5/7 Hybrid)",
+    "emotional_tone": "Playful, Premium, Cheeky, London-cool"
+  },
+  "colors": {
+    "background": {
+      "default": "#050814",
+      "description": "Deepest Navy Void"
+    },
+    "surface": {
+      "default": "#0E1428",
+      "glass": "bg-slate-900/60 backdrop-blur-xl border border-white/10",
+      "description": "Navy tint for cards and elevated elements"
+    },
+    "primary": {
+      "default": "#FF2A85",
+      "hover": "#FF4D9C",
+      "glow": "drop-shadow-[0_0_12px_rgba(255,42,133,0.5)]",
+      "description": "Hot Pink - Core CTA and brand identity"
+    },
+    "secondary": {
+      "default": "#00F0FF",
+      "description": "Electric Cyan - For secondary accents and 'Super-like' equivalent"
+    },
+    "text": {
+      "primary": "#FFFFFF",
+      "secondary": "#94A3B8",
+      "accent": "#FF2A85"
+    },
+    "feedback": {
+      "success": "#10B981",
+      "warning": "#F59E0B",
+      "danger": "#EF4444"
+    }
+  },
+  "typography": {
+    "anti_ai_rules": "No Inter, Roboto, Open Sans for headings. Embracing bold character.",
+    "fonts": {
+      "headings": {
+        "family": "Unbounded, sans-serif",
+        "description": "Ultra-modern, bold, cheeky display font",
+        "weights": "700, 900"
+      },
+      "body": {
+        "family": "Outfit, sans-serif",
+        "description": "Clean, highly legible geometric sans for UI density",
+        "weights": "300, 400, 500"
+      },
+      "accents": {
+        "family": "Caveat, cursive",
+        "description": "Used sparingly for cheeky hand-written notes or arrows ('Start Snogging ->')",
+        "weights": "700"
+      }
+    },
+    "scales": {
+      "h1": "text-4xl sm:text-5xl lg:text-6xl tracking-tighter font-black",
+      "h2": "text-2xl sm:text-3xl lg:text-4xl tracking-tight font-bold",
+      "h3": "text-xl sm:text-2xl font-bold",
+      "body": "text-base leading-relaxed text-slate-300",
+      "small": "text-sm tracking-wide text-slate-400"
+    }
+  },
+  "layout_and_spacing": {
+    "strategy": "Mobile-first PWA, utilizing vertical space for swipe decks. Generous padding in forms.",
+    "spacing_scale": "p-4, p-6, p-8 for inner card paddings. Massive gaps (gap-12, gap-24) for landing page sections.",
+    "containers": "max-w-md mx-auto for app views (simulating mobile frame on desktop), max-w-7xl for landing page.",
+    "bottom_nav": "Fixed bottom inset-x-0 h-16 bg-slate-950/80 backdrop-blur-xl border-t border-white/10 z-50 flex justify-around items-center rounded-t-2xl shadow-[0_-8px_32px_rgba(255,42,133,0.1)]"
+  },
+  "component_strategy": {
+    "buttons": {
+      "primary": "rounded-full bg-[#FF2A85] text-white font-bold tracking-wide hover:bg-[#FF4D9C] hover:drop-shadow-[0_0_15px_rgba(255,42,133,0.6)] transition-all active:scale-95",
+      "secondary": "rounded-full bg-transparent border-2 border-slate-700 text-white hover:border-[#00F0FF] hover:text-[#00F0FF] transition-all"
+    },
+    "cards": {
+      "swipe_card": "relative w-full aspect-[3/4] rounded-3xl overflow-hidden shadow-2xl touch-none",
+      "swipe_overlay": "absolute inset-0 bg-gradient-to-t from-black/90 via-black/30 to-transparent flex flex-col justify-end p-6",
+      "venue_card": "bg-[#0E1428] rounded-2xl p-4 border border-white/5 hover:border-[#FF2A85]/50 transition-colors"
+    },
+    "inputs": {
+      "default": "bg-slate-900/50 border border-slate-700 rounded-xl px-4 py-3 text-white focus:border-[#FF2A85] focus:ring-1 focus:ring-[#FF2A85] transition-all outline-none"
+    },
+    "surface": "Glassmorphism preferred for modals, sticky headers, and bottom nav to let the rich background colors bleed through."
+  },
+  "animations": {
+    "page_transitions": "Framer Motion: gentle fade and slide up (y: 20 -> 0, opacity: 0 -> 1, duration: 0.3s).",
+    "swipe_interactions": "Framer Motion useDrag. Rotate slightly based on x offset. Spring physics on release.",
+    "micro_interactions": "Heart/Like buttons pulse on click (scale: 1.2 -> 1)."
+  },
+  "media": {
+    "hero_backgrounds": [
+      {
+        "url": "https://images.pexels.com/photos/7429526/pexels-photo-7429526.jpeg",
+        "description": "Abstract neon lights for landing page hero background"
+      }
+    ],
+    "match_placeholders": [
+      {
+        "url": "https://images.unsplash.com/photo-1581292065130-c7a4155e854a",
+        "description": "Attractive woman smiling"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1542739962-4f05b0c46657",
+        "description": "Man and woman on dock"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1592943666198-fbd360dbf58e",
+        "description": "Woman in orange blazer"
+      },
+      {
+        "url": "https://images.pexels.com/photos/36729310/pexels-photo-36729310.jpeg",
+        "description": "Two travelers in city"
+      }
+    ],
+    "venues": [
+      {
+        "url": "https://images.pexels.com/photos/15521516/pexels-photo-15521516.jpeg",
+        "description": "Cozy London pub exterior night"
+      },
+      {
+        "url": "https://images.pexels.com/photos/16162431/pexels-photo-16162431.jpeg",
+        "description": "Ye Olde Watling Pub London night"
+      },
+      {
+        "url": "https://images.unsplash.com/photo-1771330683798-06d3bccb25dd",
+        "description": "Dimly lit pub interior"
+      }
+    ],
+    "icons": {
+      "library": "lucide-react",
+      "strategy": "Stroke width 2.5 for solid modern feel. Phosphor icons (@phosphor-icons/react) recommended if duotone needed."
+    }
+  },
+  "testing": {
+    "data_testid_instructions": [
+      "ALL interactive elements MUST have a data-testid attribute.",
+      "Format: kebab-case, role-based.",
+      "Examples: data-testid='start-snogging-btn', data-testid='swipe-like-btn', data-testid='nav-events-tab', data-testid='vibe-quiz-submit'."
+    ]
+  },
+  "instructions_to_main_agent": [
+    "Install Unbounded, Outfit, and Caveat fonts via Google Fonts in index.html.",
+    "Implement Mobile-First layout: The main App shell should max-width at 450px and center on desktop to simulate a mobile app, or use a proper responsive split-pane if requested. Mobile PWA feel is critical.",
+    "Do not use generic Shadcn cards for the main 'swipe deck'. Build a custom Framer Motion drag component over a full-bleed image card.",
+    "Ensure the Bottom Navigation is fixed and has a high z-index, using glassmorphism.",
+    "Use the venue images for the 'Speed Dating' and 'Date Organiser' sections.",
+    "Inject British slang playfully: 'Cheers', 'Mate', 'Fancy a drink?', 'Fit', 'Ghosting is for wankers' (in feedback gate)."
+  ]
+}

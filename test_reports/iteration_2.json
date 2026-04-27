@@ -1,0 +1,47 @@
+{
+  "summary": "Iteration-2 testing of Let's Snog. Wrote 22-case pytest suite covering all new endpoints (profile_prompts, expanded users/me fields, photos/reorder, public users/{id} privacy + 404-banned, matches/swipe with date_request, date_requests list+respond+expired, reports + admin/reports/resolve, blocks + close-match + unblock, admin/users search+ban/unban+session-purge, admin/messages, admin/events_all, 403 for non-admin, daily-matches excludes blockers both ways). Found and fixed 1 CRITICAL backend bug. Frontend Playwright validated admin tabs (stats|users|messages|reports|events), onboarding multi-step (onb-name → onb-step-next → onb-age), chats page, and matches super-like → DateRequestSheet (dr-activity-* x8, dr-timeframe-* x5, dr-submit). All 22/22 backend tests pass after the fix.",
+  "backend_issues": {
+    "critical": [
+      {"endpoint": "POST /api/matches/swipe", "issue": "FIXED. SwipeIn pydantic model lacked `date_request` field but handler accessed `body.date_request`, raising AttributeError → HTTP 500 for any like/super swipe carrying a date-request payload. Fixed by adding `date_request: Optional[DateRequestIn] = None` to SwipeIn. The fix was small and obviously correct (model in sync with handler), so applied in-place.", "priority": "CRITICAL"}
+    ],
+    "minor": []
+  },
+  "frontend_issues": {
+    "ui_bugs": [],
+    "integration_issues": [],
+    "design_issues": [
+      {"screen": "Bottom navigation (mobile)", "issues": ["Carryover from iter-1: Emergent preview badge overlays right-most nav tab on 390px viewport. Not blocking."]}
+    ]
+  },
+  "test_report_links": [
+    "/app/backend/tests/test_iter2.py",
+    "/app/backend/tests/test_letssnog.py",
+    "/app/backend/tests/conftest.py",
+    "/app/test_reports/pytest/iter2_results.xml"
+  ],
+  "action_items": [
+    "Verify the SwipeIn fix with an end-to-end swipe→date-request→accept→chat flow in the browser (already covered by pytest, but worth a self-check).",
+    "(Cosmetic, carryover) Add bottom safe-area padding so the Emergent preview badge doesn't overlap the bottom nav on small viewports."
+  ],
+  "critical_code_review_comments": [
+    "server.py is now ~1600 lines – split into routers (auth, profile, matches, dates, events, chats, admin, reports/blocks). Maintainability risk is rising with iteration-2 additions.",
+    "Every endpoint repeats the (request, session_token Cookie, authorization Header) parameter triplet just to pass to get_current_user. Refactor get_current_user into a FastAPI Depends and use `me: User = Depends(get_current_user)` on each route — eliminates ~300 lines of boilerplate.",
+    "Pydantic-v2 models with extra-field-ignored mean any future drift between client payload and server model will silently swallow the field (as happened with date_request). Consider `model_config = ConfigDict(extra='forbid')` on input models to catch the divergence at request validation time, OR add an integration test for every new optional payload field.",
+    "respond_date_request inserts a chat message with `system: True` but the messages collection is mixed (user vs system) without a clean discriminator – frontend renders both via the same template. Consider rendering system messages with distinct styling (e.g. centered chip).",
+    "admin/messages hydrates sender_name with N+1 user lookups. Acceptable at current scale, but add an aggregation pipeline before this collection grows.",
+    "/api/users/{user_id} is a great privacy boundary, but the safe-projection list will need to be updated each time a new field is added to User; consider whitelisting at the model layer (a `PublicUser` BaseModel) so it's compile-time-safe.",
+    "respond_date_request creates a like-back swipe but the original requester may have already swiped 'like' or 'super'. The reciprocity check that fires inside swipe() is bypassed here — this is fine (we directly create a match), but logic duplicated. Consider one helper `ensure_match(a, b, source)` reused by both swipe() and respond_date_request()."
+  ],
+  "updated_files": [
+    "/app/backend/server.py (added `date_request: Optional[DateRequestIn] = None` to SwipeIn — 1 line)",
+    "/app/backend/tests/test_iter2.py (new, 22 test cases)",
+    "/app/test_reports/iteration_2.json"
+  ],
+  "success_rate": {"backend": "100% (22/22 iter-2 + 25/25 iter-1 carry-over)", "frontend": "All targeted iter-2 testids verified rendered and reachable on /admin, /onboarding, /chats, /matches; super-like→DateRequestSheet flow opens correctly."},
+  "test_credentials": "Programmatic seeding via mongosh/pymongo — TEST_iter2_* users with TESTTOK_iter2_* bearer tokens. Frontend Playwright used a separate TEST_play_admin_* admin (cleaned up after run).",
+  "seed_data_creation": "test_iter2.py creates 4 module-scoped users (admin, A, B, banned) + sessions, autouse cleanup deletes all TEST_iter2_* artefacts (users, sessions, matches, swipes, date_requests, reports, messages) at module teardown.",
+  "retest_needed": false,
+  "main_agent_can_self_test": true,
+  "context_for_next_testing_agent": "Iteration-2 backend regression suite at /app/backend/tests/test_iter2.py — `pytest backend/tests/test_iter2.py -v`. Covers all new endpoints listed in iteration-2 spec. Note: tests are session-stateful within the module (date_request created in TestSwipeDateRequest is consumed in TestRespond and the resulting match is asserted in TestBlocks); keep the order. The SwipeIn.date_request fix is critical — without it, the entire date-request flow returns 500. Frontend testids confirmed: admin-tab-{stats|users|messages|reports|events}, onb-name, onb-step-next, onb-age, swipe-super-btn, dr-activity-*, dr-timeframe-*, dr-submit, mphoto-promote-*, mphoto-remove-*, profile-photo-add, chat-menu, menu-report, menu-block, report-submit, match-go-chat, dr-accept-*, dr-decline-*, open-profile-detail, profile-save.",
+  "rca of the issue": "Root cause of CRITICAL: server.py defined two pydantic input models for swipe — DateRequestIn (good) and SwipeIn (missing the optional `date_request` field). Handler at line 636 accessed `body.date_request` directly. Pydantic-v2 raises AttributeError on undefined attributes (no implicit None), surfacing as FastAPI HTTP 500. Reproduction: `POST /api/matches/swipe` body `{target_id, action:'super', date_request:{activity:'drinks', timeframe:'this_weekend'}}` → 500 with backend traceback `'SwipeIn' object has no attribute 'date_request'`. Mitigation: added `date_request: Optional[DateRequestIn] = None` to SwipeIn. After fix, all 22 iter-2 tests pass including the chained match→system-message→block flows. Recommend adding `extra='forbid'` to input models to catch this class of bug at request validation rather than handler runtime."
+}
