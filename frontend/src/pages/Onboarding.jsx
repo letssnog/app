@@ -1,10 +1,11 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { useNavigate } from "react-router-dom";
 import { api, fileUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Camera, ChevronRight, X, Check, Star, ArrowLeft } from "lucide-react";
 import { toast } from "sonner";
-import { motion, AnimatePresence } from "framer-motion";
+import { motion, useReducedMotion } from "framer-motion";
+import { SectionTransition, Pressable } from "@/components/PremiumMotion";
 import {
   PRONOUN_OPTIONS, SMOKE_OPTIONS, DRINK_OPTIONS, WORKOUT_OPTIONS,
   HAS_KIDS, WANTS_KIDS, RELIGIONS, ZODIACS, EDUCATION, INTEREST_POOL,
@@ -52,6 +53,7 @@ const STEPS = [
 export default function Onboarding() {
   const nav = useNavigate();
   const { user, setUser, refresh } = useAuth();
+  const reduceMotion = useReducedMotion();
   const [idx, setIdx] = useState(0);
   const [profile, setProfile] = useState({
     name: user?.name || "",
@@ -80,6 +82,9 @@ export default function Onboarding() {
   const [answers, setAnswers] = useState(Array(8).fill(null));
   const [promptList, setPromptList] = useState([]);
   const [saving, setSaving] = useState(false);
+  const pendingSaveRef = useRef(null);
+  const saveTimerRef = useRef(null);
+  const saveInFlightRef = useRef(false);
 
   useEffect(() => {
     api.get("/quiz/questions").then(({ data }) => setQuizQs(data));
@@ -93,16 +98,16 @@ export default function Onboarding() {
   const next = () => setIdx((i) => Math.min(i + 1, STEPS.length - 1));
   const back = () => setIdx((i) => Math.max(i - 1, 0));
 
-  // Auto-advance hold screens
+  // Auto-advance hold screens (timing allows fade + stagger to finish before advance)
   useEffect(() => {
     if (step?.group === "hold") {
-      const t = setTimeout(next, 1700);
+      const t = setTimeout(next, reduceMotion ? 650 : 1350);
       return () => clearTimeout(t);
     }
-  }, [idx]); // eslint-disable-line
+  }, [idx, reduceMotion]); // eslint-disable-line
 
-  const persist = async (extra = {}) => {
-    const payload = { ...profile, ...extra };
+  const persist = async (snapshot = profile, extra = {}) => {
+    const payload = { ...snapshot, ...extra };
     if (payload.age) payload.age = parseInt(payload.age);
     if (payload.height_cm) payload.height_cm = parseInt(payload.height_cm);
     payload.age_min = parseInt(payload.age_min || 21);
@@ -111,15 +116,47 @@ export default function Onboarding() {
     try { await api.put("/users/me", payload); } catch {}
   };
 
+  const flushPendingSave = async () => {
+    if (saveInFlightRef.current || !pendingSaveRef.current) return;
+    saveInFlightRef.current = true;
+    const snapshot = pendingSaveRef.current;
+    pendingSaveRef.current = null;
+    await persist(snapshot);
+    saveInFlightRef.current = false;
+    if (pendingSaveRef.current) {
+      await flushPendingSave();
+    }
+  };
+
+  const queuePersist = (snapshot) => {
+    pendingSaveRef.current = snapshot;
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+    saveTimerRef.current = setTimeout(() => {
+      flushPendingSave();
+    }, 250);
+  };
+
+  useEffect(() => () => {
+    if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+  }, []);
+
   const submitQuiz = async () => {
     if (answers.some((a) => !a)) { toast.error("Answer all 8 to land your matches"); return; }
     setSaving(true);
     try {
-      await persist();
+      if (saveTimerRef.current) clearTimeout(saveTimerRef.current);
+      queuePersist(profile);
+      await flushPendingSave();
       const { data } = await api.post("/users/me/quiz", { answers });
-      setUser(data); await refresh();
+      setUser(data);
+      if (!data?.onboarding_complete) {
+        toast.error("Almost there - a profile detail did not save. Please review and try again.");
+        setIdx(Math.max(0, STEPS.findIndex((s) => s.key === "photos")));
+        return;
+      }
       toast.success("You're in. Let's find your snog.");
       nav("/matches", { replace: true });
+      refresh().catch(() => {});
     } catch { toast.error("Quiz save failed"); }
     finally { setSaving(false); }
   };
@@ -161,18 +198,18 @@ export default function Onboarding() {
     }
   };
 
-  const handleNext = async () => {
+  const handleNext = () => {
     if (!canAdvance()) { toast.error("This bit's required, mate"); return; }
-    // Persist on each non-hold step (best-effort)
-    if (step.group !== "hold") await persist();
+    // Queue background save so the next step transition stays instant.
+    if (step.group !== "hold") queuePersist(profile);
     next();
   };
 
   // Top header
   return (
     <div className="min-h-[100svh] bg-snog-ink text-white relative overflow-hidden">
-      <div className="pointer-events-none absolute -top-40 -left-40 h-[420px] w-[420px] rounded-full bg-snog-pink/15 blur-[140px]"/>
-      <div className="pointer-events-none absolute top-1/3 right-[-12rem] h-[360px] w-[360px] rounded-full bg-snog-cyan/10 blur-[140px]"/>
+      <div className={`pointer-events-none absolute -top-40 -left-40 rounded-full bg-snog-pink/15 ${step.group === "hold" ? "h-[320px] w-[320px] blur-[90px]" : "h-[420px] w-[420px] blur-[140px]"}`}/>
+      <div className={`pointer-events-none absolute top-1/3 right-[-12rem] rounded-full bg-snog-cyan/10 ${step.group === "hold" ? "h-[280px] w-[280px] blur-[90px]" : "h-[360px] w-[360px] blur-[140px]"}`}/>
 
       {/* Top bar */}
       {step.group !== "hold" && (
@@ -183,9 +220,12 @@ export default function Onboarding() {
               <ArrowLeft className="h-4 w-4"/>
             </button>
             <div className="flex-1 h-1.5 rounded-full bg-white/10 overflow-hidden">
-              <motion.div
-                animate={{ width: `${(realIdx / totalReal) * 100}%` }}
-                className="h-full bg-snog-pink"
+              <div
+                className="h-full bg-snog-pink transition-[width] duration-150 ease-out"
+                style={{
+                  width: `${(realIdx / totalReal) * 100}%`,
+                  transitionDuration: reduceMotion ? "0ms" : "150ms",
+                }}
               />
             </div>
             <span className="text-xs text-white/50">{realIdx}/{totalReal}</span>
@@ -195,14 +235,7 @@ export default function Onboarding() {
       )}
 
       <div className="relative z-10 mx-auto max-w-md px-5 pb-12">
-        <AnimatePresence mode="wait">
-          <motion.div
-            key={step.key}
-            initial={{ opacity: 0, y: 20, scale: 0.98 }}
-            animate={{ opacity: 1, y: 0, scale: 1 }}
-            exit={{ opacity: 0, y: -16, scale: 0.98 }}
-            transition={{ type: "spring", stiffness: 220, damping: 26 }}
-          >
+        <SectionTransition sectionKey={step.key} slide={false} className="will-change-transform">
             {step.group === "hold" && (
               <HoldingScreen icon={step.icon} title={step.title} subtitle={step.subtitle} accent={step.accent}/>
             )}
@@ -322,7 +355,7 @@ export default function Onboarding() {
                   {INTEREST_POOL.map((i) => {
                     const sel = profile.interests.includes(i);
                     return (
-                      <button type="button" key={i}
+                      <Pressable as="button" type="button" key={i}
                         onClick={()=>setProfile((p)=>{
                           const has = p.interests.includes(i);
                           if (has) return { ...p, interests: p.interests.filter((x)=>x!==i) };
@@ -331,7 +364,7 @@ export default function Onboarding() {
                         })}
                         className={`rounded-full border px-3 py-1.5 text-sm transition-all ${
                           sel ? "bg-snog-pink border-snog-pink text-white" : "border-white/15 text-white/70 hover:border-white/40"
-                        }`}>{i}</button>
+                        }`}>{i}</Pressable>
                     );
                   })}
                 </div>
@@ -391,33 +424,44 @@ export default function Onboarding() {
                 <h1 className="font-display text-3xl font-black">Vibe Quiz</h1>
                 <p className="text-sm text-white/70 mt-1">8 quick questions. Powers your matches.</p>
                 <div className="mt-5 space-y-4">
-                  {quizQs.map((q, qi) => (
-                    <div key={q.id} className="glass rounded-2xl p-4">
-                      <div className="text-xs uppercase tracking-widest text-snog-pink">Q{qi + 1}</div>
-                      <div className="font-display text-lg font-bold">{q.q}</div>
-                      <div className="mt-3 grid gap-2">
-                        {q.options.map((o) => (
-                          <button key={o.k} type="button" data-testid={`quiz-q${qi+1}-${o.k}`}
-                            onClick={()=>setAnswers((a)=>{const n=[...a];n[qi]=o.k;return n;})}
-                            className={`flex items-center justify-between rounded-xl border px-4 py-2.5 text-left transition-all ${
-                              answers[qi] === o.k ? "border-snog-pink bg-snog-pink/15" : "border-white/10 hover:border-white/30"
-                            }`}>
-                            <span className="text-sm">{o.t}</span>
-                            {answers[qi] === o.k && <Check className="h-4 w-4 text-snog-pink"/>}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-                  ))}
+                  {quizQs.length === 0
+                    ? Array.from({ length: 8 }).map((_, qi) => (
+                        <div key={qi} className="animate-pulse rounded-2xl border border-white/10 bg-white/[0.04] p-4">
+                          <div className="h-3 w-10 rounded bg-white/15" />
+                          <div className="mt-3 h-5 w-4/5 max-w-md rounded bg-white/10" />
+                          <div className="mt-3 grid gap-2">
+                            <div className="h-10 rounded-xl bg-white/10" />
+                            <div className="h-10 rounded-xl bg-white/10" />
+                            <div className="h-10 rounded-xl bg-white/10" />
+                          </div>
+                        </div>
+                      ))
+                    : quizQs.map((q, qi) => (
+                        <div key={q.id} className="glass rounded-2xl p-4">
+                          <div className="text-xs uppercase tracking-widest text-snog-pink">Q{qi + 1}</div>
+                          <div className="font-display text-lg font-bold">{q.q}</div>
+                          <div className="mt-3 grid gap-2">
+                            {q.options.map((o) => (
+                              <Pressable as="button" key={o.k} type="button" data-testid={`quiz-q${qi+1}-${o.k}`}
+                                onClick={()=>setAnswers((a)=>{const n=[...a];n[qi]=o.k;return n;})}
+                                className={`flex items-center justify-between rounded-xl border px-4 py-2.5 text-left transition-all ${
+                                  answers[qi] === o.k ? "border-snog-pink bg-snog-pink/15" : "border-white/10 hover:border-white/30"
+                                }`}>
+                                <span className="text-sm">{o.t}</span>
+                                {answers[qi] === o.k && <Check className="h-4 w-4 text-snog-pink"/>}
+                              </Pressable>
+                            ))}
+                          </div>
+                        </div>
+                      ))}
                 </div>
-                <button data-testid="onb-quiz-submit" disabled={saving || answers.some((a)=>!a)}
+                <button data-testid="onb-quiz-submit" disabled={saving || quizQs.length === 0 || answers.some((a)=>!a)}
                   onClick={submitQuiz} className="btn-primary mt-5 w-full">
                   {saving ? "Sussing you out…" : "Find my snogs"}
                 </button>
               </div>
             )}
-          </motion.div>
-        </AnimatePresence>
+        </SectionTransition>
 
         {/* Action button (skip on hold + quiz) */}
         {step.group !== "hold" && step.key !== "quiz" && (

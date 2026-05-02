@@ -82,16 +82,24 @@ def verify_cognito_jwt(token: str) -> dict:
         if not key:
             raise HTTPException(401, "Invalid token")
 
+        unverified_claims = jwt.get_unverified_claims(token)
+        token_use = unverified_claims.get("token_use")
+
+        verify_aud = token_use == "id"
         claims = jwt.decode(
             token,
             key,
             algorithms=["RS256"],
-            audience=COGNITO_APP_CLIENT_ID,
+            audience=COGNITO_APP_CLIENT_ID if verify_aud else None,
             issuer=_cognito_issuer(),
-            options={"verify_aud": True, "verify_iss": True},
+            options={"verify_aud": verify_aud, "verify_iss": True},
         )
+
         # token_use is typically "id" or "access"
-        if claims.get("token_use") not in ("id", "access"):
+        token_use = claims.get("token_use")
+        if token_use not in ("id", "access"):
+            raise HTTPException(401, "Invalid token")
+        if token_use == "access" and claims.get("client_id") != COGNITO_APP_CLIENT_ID:
             raise HTTPException(401, "Invalid token")
         return claims
     except HTTPException:
@@ -175,6 +183,7 @@ class User(BaseModel):
     premium: bool = False
     is_admin: bool = False
     is_banned: bool = False
+    is_restricted: bool = False
     blocked_user_ids: List[str] = []
     onboarding_complete: bool = False
     created_at: datetime = Field(default_factory=lambda: datetime.now(timezone.utc))
@@ -229,8 +238,14 @@ class DateRequestRespond(BaseModel):
 class ReportIn(BaseModel):
     reported_user_id: str
     match_id: Optional[str] = None
+    message_id: Optional[str] = None
     reason: str
     detail: Optional[str] = None
+
+
+class TrustActionIn(BaseModel):
+    action: str  # dismiss | ban | restrict | delete_profile
+    admin_note: Optional[str] = None
 
 
 class BlockIn(BaseModel):
@@ -316,7 +331,7 @@ async def get_current_user(
             "smokes": None, "drinks": None, "workout": None,
             "has_kids": None, "wants_kids": None, "religion": None, "zodiac": None,
             "dates_completed": 0, "premium": False,
-            "is_admin": is_first, "is_banned": False, "blocked_user_ids": [],
+            "is_admin": is_first, "is_banned": False, "is_restricted": False, "blocked_user_ids": [],
             "onboarding_complete": False,
             "created_at": datetime.now(timezone.utc).isoformat(),
         })
@@ -561,14 +576,14 @@ async def submit_quiz(
 # ---------------------------------------------------------------------------
 # Matching algorithm
 # ---------------------------------------------------------------------------
-def compatibility_score(me: dict, other: dict) -> float:
-    # 70% quiz overlap
+def compatibility_breakdown(me: dict, other: dict) -> dict:
+    # 55% quiz overlap
     q1, q2 = me.get("quiz") or [], other.get("quiz") or []
     if q1 and q2 and len(q1) == len(q2):
         overlap = sum(1 for a, b in zip(q1, q2) if a == b) / len(q1)
     else:
         overlap = 0.0
-    quiz_part = 0.70 * overlap
+    quiz_part = 0.55 * overlap
 
     # 20% location/age
     loc_match = 1.0 if me.get("location") == other.get("location") else 0.5
@@ -578,11 +593,43 @@ def compatibility_score(me: dict, other: dict) -> float:
             age_ok = 1.0
     loc_age_part = 0.20 * (0.5 * loc_match + 0.5 * age_ok)
 
+    # 15% interest overlap
+    i1, i2 = set(me.get("interests") or []), set(other.get("interests") or [])
+    if i1 and i2:
+        interest_overlap = len(i1.intersection(i2)) / max(1, min(len(i1), len(i2)))
+    else:
+        interest_overlap = 0.0
+    interest_part = 0.15 * interest_overlap
+
     # 10% behaviour boost
     boost = min(other.get("dates_completed", 0) / 5, 1.0)
     boost_part = 0.10 * boost
 
-    return quiz_part + loc_age_part + boost_part
+    total = quiz_part + loc_age_part + interest_part + boost_part
+    reasons = []
+    if overlap >= 0.75:
+        reasons.append("Strong vibe quiz alignment")
+    if interest_overlap >= 0.5:
+        reasons.append("Shared interests and lifestyle")
+    if age_ok >= 1.0:
+        reasons.append("Within your preferred age range")
+    if loc_match >= 1.0:
+        reasons.append("Local to your area")
+    if not reasons:
+        reasons.append("Solid all-round compatibility")
+
+    return {
+        "score": total,
+        "quiz_overlap": overlap,
+        "interest_overlap": interest_overlap,
+        "age_match": bool(age_ok),
+        "location_match": bool(loc_match >= 1.0),
+        "reasons": reasons[:2],
+    }
+
+
+def compatibility_score(me: dict, other: dict) -> float:
+    return compatibility_breakdown(me, other)["score"]
 
 
 def london_today_str() -> str:
@@ -614,6 +661,7 @@ async def daily_matches(
             {"user_id": {"$nin": list(already_ids)},
              "onboarding_complete": True,
              "is_banned": {"$ne": True},
+             "is_restricted": {"$ne": True},
              "photos.0": {"$exists": True}},
             {"_id": 0},
         )
@@ -643,14 +691,17 @@ async def daily_matches(
         u = await db.users.find_one({"user_id": uid}, {"_id": 0})
         if not u:
             continue
-        score = compatibility_score(me_doc, u)
+        breakdown = compatibility_breakdown(me_doc, u)
         profiles.append({
             "user_id": u["user_id"], "name": u["name"],
             "age": u.get("age"), "bio": u.get("bio"),
             "job": u.get("job"), "height_cm": u.get("height_cm"),
             "interests": u.get("interests", []),
             "photos": u.get("photos", []),
-            "score": round(score, 2),
+            "score": round(breakdown["score"], 2),
+            "match_reasons": breakdown["reasons"],
+            "quiz_overlap": round(breakdown["quiz_overlap"], 2),
+            "interest_overlap": round(breakdown["interest_overlap"], 2),
         })
     return {
         "date": today,
@@ -1126,6 +1177,9 @@ async def send_message(
     authorization: Optional[str] = Header(None),
 ):
     me = await get_current_user(request, session_token, authorization)
+    me_row = await db.users.find_one({"user_id": me.user_id}, {"_id": 0, "is_restricted": 1})
+    if me_row and me_row.get("is_restricted"):
+        raise HTTPException(403, "Your account can't send messages right now")
     m = await _get_match(match_id, me.user_id)
     if not m.get("chat_open", True):
         raise HTTPException(403, "Chat is closed")
@@ -1416,17 +1470,54 @@ async def create_report(
     authorization: Optional[str] = Header(None),
 ):
     me = await get_current_user(request, session_token, authorization)
+    if body.message_id:
+        if not body.match_id:
+            raise HTTPException(400, "match_id is required when reporting a message")
+        await _get_match(body.match_id, me.user_id)
+        msg = await db.messages.find_one({"id": body.message_id, "match_id": body.match_id}, {"_id": 0})
+        if not msg:
+            raise HTTPException(404, "Message not found")
+        if msg.get("system"):
+            raise HTTPException(400, "Cannot report system messages")
+        if msg["sender_id"] != body.reported_user_id:
+            raise HTTPException(400, "Reported user must be the message sender")
+        if msg["sender_id"] == me.user_id:
+            raise HTTPException(400, "Can't report your own message")
+        report_kind = "message"
+        message_preview = (msg.get("body") or "")[:1000]
+    else:
+        report_kind = "profile"
+        message_preview = None
     await db.reports.insert_one({
         "report_id": f"rep_{uuid.uuid4().hex[:10]}",
+        "report_kind": report_kind,
         "reporter_id": me.user_id,
         "reported_user_id": body.reported_user_id,
         "match_id": body.match_id,
+        "message_id": body.message_id,
+        "message_preview": message_preview,
         "reason": body.reason[:120],
         "detail": (body.detail or "")[:1000],
         "status": "open",
         "created_at": datetime.now(timezone.utc).isoformat(),
     })
     return {"ok": True}
+
+
+async def _soft_delete_user_profile(user_id: str) -> None:
+    await db.users.update_one(
+        {"user_id": user_id},
+        {"$set": {
+            "is_banned": True,
+            "is_restricted": False,
+            "name": "Former member",
+            "bio": "", "photos": [], "prompts": [], "interests": [],
+            "job": None, "education": None, "height_cm": None,
+            "quiz": [], "onboarding_complete": False,
+            "profile_removed_at": datetime.now(timezone.utc).isoformat(),
+        }},
+    )
+    await db.sessions.delete_many({"user_id": user_id})
 
 
 @api.post("/blocks")
@@ -1515,6 +1606,20 @@ async def admin_unban_user(
     return {"ok": True}
 
 
+@api.post("/admin/users/{user_id}/unrestrict")
+async def admin_unrestrict_user(
+    user_id: str,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    me = await get_current_user(request, session_token, authorization)
+    if not me.is_admin:
+        raise HTTPException(403, "Admin only")
+    await db.users.update_one({"user_id": user_id}, {"$set": {"is_restricted": False}})
+    return {"ok": True}
+
+
 @api.get("/admin/messages")
 async def admin_list_messages(
     request: Request,
@@ -1548,10 +1653,100 @@ async def admin_list_reports(
     for r in rows:
         rpt = await db.users.find_one({"user_id": r["reporter_id"]}, {"_id": 0})
         rpd = await db.users.find_one({"user_id": r["reported_user_id"]}, {"_id": 0})
-        out.append({**r,
+        rk = r.get("report_kind") or "profile"
+        out.append({**r, "report_kind": rk,
                     "reporter": {"name": rpt["name"], "email": rpt["email"]} if rpt else None,
-                    "reported": {"name": rpd["name"], "email": rpd["email"], "is_banned": rpd.get("is_banned", False)} if rpd else None})
+                    "reported": {
+                        "name": rpd["name"], "email": rpd["email"],
+                        "is_banned": rpd.get("is_banned", False),
+                        "is_restricted": rpd.get("is_restricted", False),
+                    } if rpd else None})
     return out
+
+
+@api.get("/admin/trust/queue")
+async def admin_trust_queue(
+    request: Request,
+    status: str = "open",
+    kind: Optional[str] = None,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    me = await get_current_user(request, session_token, authorization)
+    if not me.is_admin:
+        raise HTTPException(403, "Admin only")
+    flt: Dict[str, Any] = {}
+    if status == "open":
+        flt["status"] = "open"
+    elif status == "resolved":
+        flt["status"] = "resolved"
+    if kind == "profile":
+        flt["$or"] = [{"report_kind": "profile"}, {"report_kind": {"$exists": False}}]
+    elif kind == "message":
+        flt["report_kind"] = "message"
+    rows = await db.reports.find(flt if flt else {}, {"_id": 0}).sort("created_at", -1).to_list(400)
+    out = []
+    for r in rows:
+        rpt = await db.users.find_one({"user_id": r["reporter_id"]}, {"_id": 0})
+        rpd = await db.users.find_one({"user_id": r["reported_user_id"]}, {"_id": 0})
+        rk = r.get("report_kind") or "profile"
+        out.append({**r, "report_kind": rk,
+                    "reporter": {"name": rpt["name"], "email": rpt["email"]} if rpt else None,
+                    "reported": {
+                        "name": rpd["name"], "email": rpd["email"],
+                        "is_banned": rpd.get("is_banned", False),
+                        "is_restricted": rpd.get("is_restricted", False),
+                    } if rpd else None})
+    return out
+
+
+@api.post("/admin/trust/reports/{report_id}/action")
+async def admin_trust_report_action(
+    report_id: str,
+    body: TrustActionIn,
+    request: Request,
+    session_token: Optional[str] = Cookie(None),
+    authorization: Optional[str] = Header(None),
+):
+    me = await get_current_user(request, session_token, authorization)
+    if not me.is_admin:
+        raise HTTPException(403, "Admin only")
+    act = (body.action or "").lower().strip()
+    if act not in ("dismiss", "ban", "restrict", "delete_profile"):
+        raise HTTPException(400, "Invalid action")
+    rep = await db.reports.find_one({"report_id": report_id}, {"_id": 0})
+    if not rep:
+        raise HTTPException(404, "Report not found")
+    if rep.get("status") != "open":
+        raise HTTPException(400, "Report is already closed")
+    uid = rep["reported_user_id"]
+    now = datetime.now(timezone.utc).isoformat()
+    note = (body.admin_note or "")[:500]
+
+    async def _close(resolution: str):
+        await db.reports.update_one(
+            {"report_id": report_id},
+            {"$set": {
+                "status": "resolved",
+                "resolution": resolution,
+                "resolved_at": now,
+                "admin_note": note,
+            }},
+        )
+
+    if act == "dismiss":
+        await _close("dismissed")
+    elif act == "ban":
+        await db.users.update_one({"user_id": uid}, {"$set": {"is_banned": True}})
+        await db.sessions.delete_many({"user_id": uid})
+        await _close("banned")
+    elif act == "restrict":
+        await db.users.update_one({"user_id": uid}, {"$set": {"is_restricted": True}})
+        await _close("restricted")
+    elif act == "delete_profile":
+        await _soft_delete_user_profile(uid)
+        await _close("delete_profile")
+    return {"ok": True}
 
 
 @api.post("/admin/reports/{report_id}/resolve")
@@ -1565,6 +1760,7 @@ async def admin_resolve_report(
     if not me.is_admin:
         raise HTTPException(403, "Admin only")
     await db.reports.update_one({"report_id": report_id}, {"$set": {"status": "resolved",
+                                  "resolution": "resolved_legacy",
                                   "resolved_at": datetime.now(timezone.utc).isoformat()}})
     return {"ok": True}
 

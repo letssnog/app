@@ -1,9 +1,11 @@
+import { useState } from "react";
 import { motion, AnimatePresence } from "framer-motion";
 import { fileUrl } from "@/lib/api";
 import {
   X, MapPin, Briefcase, GraduationCap, Ruler, Cigarette, Wine, Dumbbell,
-  Baby, Heart, Sparkles, Quote, Wand2
+  Baby, Heart, Sparkles, Quote, Wand2, Flag,
 } from "lucide-react";
+import ReportUserModal from "@/components/ReportUserModal";
 
 const META = [
   ["job", Briefcase],
@@ -26,9 +28,20 @@ const PRETTY = {
 };
 
 /** Full-screen profile detail, opened by tapping a swipe card */
-export default function ProfileDetail({ open, profile, onClose, onLike, onPass, onSuggestDate }) {
+export default function ProfileDetail({
+  open,
+  profile,
+  onClose,
+  onLike,
+  onPass,
+  onSuggestDate,
+  enableProfileReport = true,
+  profileReportMatchId,
+}) {
+  const [reportOpen, setReportOpen] = useState(false);
   if (!open || !profile) return null;
   return (
+    <>
     <AnimatePresence>
       <motion.div
         initial={{ opacity: 0 }} animate={{ opacity: 1 }} exit={{ opacity: 0 }}
@@ -41,11 +54,26 @@ export default function ProfileDetail({ open, profile, onClose, onLike, onPass, 
         >
           {/* Hero */}
           <div className="relative">
-            <button data-testid="profile-close"
-              onClick={onClose}
-              className="absolute right-4 top-4 z-10 grid h-9 w-9 place-items-center rounded-full bg-black/60 backdrop-blur">
-              <X className="h-4 w-4"/>
-            </button>
+            <div className="absolute right-4 top-4 z-10 flex gap-2">
+              {enableProfileReport && profile.user_id && (
+                <button
+                  type="button"
+                  data-testid="profile-report-open"
+                  onClick={() => setReportOpen(true)}
+                  className="grid h-9 w-9 place-items-center rounded-full bg-black/60 backdrop-blur hover:text-snog-pink"
+                  title="Report profile"
+                >
+                  <Flag className="h-4 w-4" />
+                </button>
+              )}
+              <button
+                data-testid="profile-close"
+                onClick={onClose}
+                className="grid h-9 w-9 place-items-center rounded-full bg-black/60 backdrop-blur"
+              >
+                <X className="h-4 w-4" />
+              </button>
+            </div>
             <div className="aspect-[3/4] w-full overflow-hidden">
               {profile.photos?.[0]
                 ? <img src={fileUrl(profile.photos[0])} alt="" className="h-full w-full object-cover"/>
@@ -141,5 +169,13 @@ export default function ProfileDetail({ open, profile, onClose, onLike, onPass, 
         </motion.div>
       </motion.div>
     </AnimatePresence>
+    {reportOpen && (
+      <ReportUserModal
+        reportedUserId={profile.user_id}
+        matchId={profileReportMatchId}
+        onClose={() => setReportOpen(false)}
+      />
+    )}
+    </>
   );
 }

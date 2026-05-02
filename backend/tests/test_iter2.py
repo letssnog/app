@@ -30,7 +30,7 @@ def _seed_user(suffix="x", is_admin=False, banned=False, photos=None):
         "quiz": ["A"]*8, "interests": [], "location": "London",
         "age_min": 21, "age_max": 45, "looking_for": "everyone",
         "dates_completed": 0, "premium": False,
-        "is_admin": is_admin, "is_banned": banned,
+        "is_admin": is_admin, "is_banned": banned, "is_restricted": False,
         "blocked_user_ids": [], "prompts": [],
         "onboarding_complete": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
@@ -253,6 +253,72 @@ class TestReports:
         assert r.status_code == 200
         doc = db.reports.find_one({"report_id": rep["report_id"]})
         assert doc["status"] == "resolved"
+
+    def test_report_message(self, user_a, user_b):
+        mid = f"match_iter2_{uuid.uuid4().hex[:10]}"
+        db.matches.insert_one({
+            "match_id": mid, "user_a": user_a["user_id"], "user_b": user_b["user_id"],
+            "source": "test", "chat_open": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        msg_id = uuid.uuid4().hex
+        db.messages.insert_one({
+            "id": msg_id, "match_id": mid, "sender_id": user_b["user_id"],
+            "body": "Reportable content", "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        r = requests.post(f"{BASE_URL}/api/reports", headers=H(user_a["token"]), json={
+            "reported_user_id": user_b["user_id"], "match_id": mid, "message_id": msg_id,
+            "reason": "Harassment", "detail": "please review",
+        })
+        assert r.status_code == 200
+        doc = db.reports.find_one({"message_id": msg_id})
+        assert doc and doc.get("report_kind") == "message"
+        assert "Reportable" in (doc.get("message_preview") or "")
+
+    def test_trust_queue_and_dismiss(self, user_a, user_b, admin_user):
+        r = requests.post(f"{BASE_URL}/api/reports", headers=H(user_a["token"]),
+                          json={"reported_user_id": user_b["user_id"], "reason": "spam", "detail": "x"})
+        assert r.status_code == 200
+        r = requests.get(f"{BASE_URL}/api/admin/trust/queue", headers=H(admin_user["token"]))
+        assert r.status_code == 200
+        rows = r.json()
+        ours = [x for x in rows if x["reporter_id"] == user_a["user_id"] and x["reported_user_id"] == user_b["user_id"]]
+        assert ours
+        rep_id = ours[0]["report_id"]
+        r2 = requests.post(
+            f"{BASE_URL}/api/admin/trust/reports/{rep_id}/action",
+            headers=H(admin_user["token"]), json={"action": "dismiss", "admin_note": "ok"},
+        )
+        assert r2.status_code == 200
+        d = db.users.find_one({"user_id": user_b["user_id"]})
+        assert d.get("is_banned") is not True
+        assert d.get("is_restricted") is not True
+
+    def test_trust_restrict_blocks_send(self, user_a, user_b, admin_user):
+        mid = f"match_iter2_{uuid.uuid4().hex[:10]}"
+        db.matches.insert_one({
+            "match_id": mid, "user_a": user_a["user_id"], "user_b": user_b["user_id"],
+            "source": "test", "chat_open": True,
+            "created_at": datetime.now(timezone.utc).isoformat(),
+        })
+        requests.post(f"{BASE_URL}/api/reports", headers=H(user_a["token"]),
+                      json={"reported_user_id": user_b["user_id"], "reason": "spam"})
+        r = requests.get(f"{BASE_URL}/api/admin/trust/queue", headers=H(admin_user["token"]))
+        rows = [
+            x for x in r.json()
+            if x["reported_user_id"] == user_b["user_id"] and x["reporter_id"] == user_a["user_id"] and x["status"] == "open"
+        ]
+        rep_id = rows[-1]["report_id"]
+        r2 = requests.post(
+            f"{BASE_URL}/api/admin/trust/reports/{rep_id}/action",
+            headers=H(admin_user["token"]), json={"action": "restrict"},
+        )
+        assert r2.status_code == 200
+        r3 = requests.post(
+            f"{BASE_URL}/api/chat/threads/{mid}/messages",
+            headers=H(user_b["token"]), json={"body": "hi"},
+        )
+        assert r3.status_code == 403
 
     def test_admin_reports_403_for_non_admin(self, user_a):
         r = requests.get(f"{BASE_URL}/api/admin/reports", headers=H(user_a["token"]))

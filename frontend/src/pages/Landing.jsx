@@ -1,5 +1,6 @@
 import { useNavigate } from "react-router-dom";
 import { Heart, MapPin, Sparkles, Users, ShieldCheck, MessageCircleHeart } from "lucide-react";
+import { motion } from "framer-motion";
 
 const HERO_BG = "https://images.pexels.com/photos/7429526/pexels-photo-7429526.jpeg";
 const SHOTS = [
@@ -65,14 +66,18 @@ export default function Landing() {
           {SHOTS.map((src, i) => {
             const isTop = i === 0;
             const offset = i; // 0 (top), 1, 2
+            const stackY = offset * 18;
+            const stackScale = 1 - offset * 0.05;
+            const stackRotate = offset * 2;
             return (
-              <div
+              <motion.div
                 key={src}
-                className="swipe-card absolute inset-0 overflow-hidden rounded-[28px] bg-snog-navy"
+                className="swipe-card premium-card absolute inset-0 overflow-hidden rounded-[28px] bg-snog-navy"
+                initial={{ opacity: 0, y: stackY + 14, scale: stackScale, rotate: stackRotate }}
+                animate={{ opacity: isTop ? 1 : 0.55, y: stackY, scale: stackScale, rotate: stackRotate }}
+                transition={{ duration: 0.25 + offset * 0.05, ease: [0.22, 1, 0.36, 1] }}
                 style={{
-                  transform: `translateY(${offset * 18}px) scale(${1 - offset * 0.05}) rotate(${offset * 2}deg)`,
                   zIndex: 30 - offset,
-                  opacity: isTop ? 1 : 0.55,
                   filter: isTop ? "none" : "blur(1.5px)",
                 }}
               >
@@ -90,7 +95,7 @@ export default function Landing() {
                     </div>
                   </>
                 )}
-              </div>
+              </motion.div>
             );
           })}
         </div>

@@ -1,9 +1,10 @@
-import { useEffect, useRef, useState } from "react";
+import { useCallback, useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import { api, fileUrl, API } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { Send, Timer, Heart, X } from "lucide-react";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 
 export default function EventLive() {
   const { eventId } = useParams();
@@ -15,15 +16,19 @@ export default function EventLive() {
   const [secsLeft, setSecsLeft] = useState(null);
   const wsRef = useRef(null);
 
-  const refresh = async () => {
+  const refresh = useCallback(async () => {
     const { data } = await api.get(`/events/${eventId}/state`);
     setState(data);
-  };
+  }, [eventId]);
 
-  useEffect(() => { refresh(); const id = setInterval(refresh, 5000); return ()=>clearInterval(id); }, [eventId]);
+  useEffect(() => { refresh(); const id = setInterval(refresh, 5000); return ()=>clearInterval(id); }, [refresh]);
 
+  const currentRound = state?.current_round;
+  const roundProgress = state?.round_seconds && secsLeft !== null
+    ? Math.max(0, Math.min(100, ((state.round_seconds - secsLeft) / state.round_seconds) * 100))
+    : 0;
   useEffect(() => {
-    if (!state || state.current_round < 1) return;
+    if (!currentRound || currentRound < 1) return;
     setMessages([]);
     const cookie = document.cookie.match(/session_token=([^;]+)/);
     let token = cookie?.[1];
@@ -41,7 +46,7 @@ export default function EventLive() {
       wsRef.current = ws;
       return () => ws.close();
     } catch {}
-  }, [eventId, state?.current_round]);
+  }, [eventId, currentRound]);
 
   // Timer
   useEffect(() => {
@@ -107,7 +112,8 @@ export default function EventLive() {
 
   return (
     <div className="flex h-[calc(100svh-100px)] flex-col">
-      <div className="glass flex items-center gap-3 rounded-2xl p-3">
+      <motion.div className="glass premium-card flex items-center gap-3 rounded-2xl p-3"
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <div className="h-12 w-12 overflow-hidden rounded-xl bg-white/10">
           {state.opponent.photos?.[0] && <img src={fileUrl(state.opponent.photos[0])} className="h-full w-full object-cover" alt=""/>}
         </div>
@@ -121,13 +127,16 @@ export default function EventLive() {
           </div>
           <div className="text-[10px] uppercase tracking-widest text-white/50">Round timer</div>
         </div>
-      </div>
+      </motion.div>
 
-      <div className="mt-3 rounded-2xl border border-snog-pink/30 bg-snog-pink/10 p-3 text-sm">
+      <div className="mt-3 rounded-2xl border border-snog-pink/30 bg-snog-pink/10 p-3 text-sm premium-card">
         <span className="font-accent text-xl text-snog-pink">Icebreaker → </span>{state.icebreaker}
+        <div className="mt-2 h-1.5 overflow-hidden rounded-full bg-white/10">
+          <div className="h-full bg-snog-cyan transition-[width] duration-500 ease-linear" style={{ width: `${roundProgress}%` }} />
+        </div>
       </div>
 
-      <div className="mt-3 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 scroll-hide">
+      <div className="mt-3 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 scroll-hide premium-card">
         {messages.length === 0 && <p className="text-center text-xs text-white/40">Say something cheeky...</p>}
         {messages.map((m, i) => {
           const mine = m.from === user?.user_id;

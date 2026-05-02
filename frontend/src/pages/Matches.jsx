@@ -5,6 +5,7 @@ import { toast } from "sonner";
 import ProfileDetail from "@/components/ProfileDetail";
 import DateRequestSheet from "@/components/DateRequestSheet";
 import MatchAnimation from "@/components/MatchAnimation";
+import { motion } from "framer-motion";
 
 export default function Matches() {
   const [data, setData] = useState(null);
@@ -88,10 +89,10 @@ export default function Matches() {
         <span className="font-accent text-2xl text-snog-cyan">#{idx + 1}</span>
       </div>
 
-      <button className="relative aspect-[3/4] w-full block" onClick={openDetail} data-testid="open-profile-detail">
+      <button className="relative aspect-[3/4] w-full block premium-pressable" onClick={openDetail} data-testid="open-profile-detail">
         {data.profiles.slice(idx, idx + 3).reverse().map((p, i, arr) => {
           const top = i === arr.length - 1;
-          return <SwipeCard key={p.user_id + idx + i} profile={p} z={i + 1} active={top} insight={top ? insights[p.user_id] : null}/>;
+          return <SwipeCard key={p.user_id} profile={p} z={i + 1} active={top} insight={top ? insights[p.user_id] : null}/>;
         })}
         <span className="pointer-events-none absolute right-3 bottom-20 z-30 inline-flex items-center gap-1 rounded-full bg-black/60 px-3 py-1.5 text-xs font-semibold backdrop-blur">
           <Eye className="h-3.5 w-3.5"/> Tap for full profile
@@ -132,13 +133,15 @@ export default function Matches() {
 
 function SwipeCard({ profile, z, active, insight }) {
   const photo = profile.photos?.[0];
+  const stackY = -(z - 1) * 8;
+  const stackScale = 1 - (z - 1) * 0.04;
   return (
-    <div
-      className="swipe-card absolute inset-0 overflow-hidden rounded-[28px] border border-white/10 bg-snog-navy"
-      style={{
-        transform: `translateY(${-(z - 1) * 8}px) scale(${1 - (z - 1) * 0.04})`,
-        zIndex: 20 - z, opacity: active ? 1 : 0.7
-      }}
+    <motion.div
+      className="swipe-card premium-card absolute inset-0 overflow-hidden rounded-[28px] border border-white/10 bg-snog-navy"
+      initial={{ opacity: 0, y: stackY + 14 }}
+      animate={{ opacity: active ? 1 : 0.7, y: stackY, scale: stackScale }}
+      transition={{ duration: 0.22, ease: [0.22, 1, 0.36, 1] }}
+      style={{ zIndex: 20 - z }}
     >
       {photo
         ? <img src={fileUrl(photo)} alt={profile.name} className="h-full w-full object-cover"/>
@@ -163,6 +166,15 @@ function SwipeCard({ profile, z, active, insight }) {
           {profile.job && <span className="inline-flex items-center gap-1"><Briefcase className="h-3 w-3"/>{profile.job}</span>}
         </div>
         {profile.bio && <p className="mt-2 line-clamp-2 text-sm text-white/85">{profile.bio}</p>}
+        {!!profile.match_reasons?.length && (
+          <div className="mt-2 flex flex-wrap gap-1.5">
+            {profile.match_reasons.map((r) => (
+              <span key={r} className="rounded-full border border-white/15 bg-black/35 px-2 py-0.5 text-[10px] text-white/85">
+                {r}
+              </span>
+            ))}
+          </div>
+        )}
         {insight?.why && (
           <div className="mt-2 flex items-start gap-1.5 rounded-xl bg-white/10 px-2.5 py-1.5 backdrop-blur-sm border border-white/10">
             <Wand2 className="h-3.5 w-3.5 text-snog-cyan mt-0.5 shrink-0"/>
@@ -170,7 +182,7 @@ function SwipeCard({ profile, z, active, insight }) {
           </div>
         )}
       </div>
-    </div>
+    </motion.div>
   );
 }
 

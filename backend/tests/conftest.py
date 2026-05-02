@@ -57,6 +57,9 @@ def _create_user(db, suffix="a", is_admin=False, photos=None, quiz=None, age=29)
         "age_min": 21, "age_max": 45,
         "dates_completed": 0, "premium": False,
         "is_admin": is_admin,
+        "is_banned": False,
+        "is_restricted": False,
+        "blocked_user_ids": [],
         "onboarding_complete": True,
         "created_at": datetime.now(timezone.utc).isoformat(),
     })

@@ -1,13 +1,40 @@
 {
   "short_name": "Let's Snog",
   "name": "Let's Snog – Smart matches. Actual dates in London.",
-  "icons": [
-    { "src": "icon-192.svg", "type": "image/svg+xml", "sizes": "192x192" },
-    { "src": "icon-512.svg", "type": "image/svg+xml", "sizes": "512x512" }
-  ],
-  "start_url": ".",
+  "description": "The cheeky, London-first dating app.",
+  "id": "/",
+  "start_url": "/",
+  "scope": "/",
   "display": "standalone",
+  "display_override": ["standalone", "browser"],
   "theme_color": "#050814",
   "background_color": "#050814",
-  "description": "The cheeky, London-first dating app."
+  "categories": ["social", "lifestyle"],
+  "icons": [
+    { "src": "icon-192.svg", "type": "image/svg+xml", "sizes": "192x192", "purpose": "any" },
+    { "src": "icon-512.svg", "type": "image/svg+xml", "sizes": "512x512", "purpose": "any" }
+  ],
+  "shortcuts": [
+    {
+      "name": "Today's snogs",
+      "short_name": "Snogs",
+      "description": "Open your daily matches",
+      "url": "/matches",
+      "icons": [{ "src": "icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Chats",
+      "short_name": "Chats",
+      "description": "Your conversations",
+      "url": "/chats",
+      "icons": [{ "src": "icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    },
+    {
+      "name": "Events",
+      "short_name": "Events",
+      "description": "Speed dating nights",
+      "url": "/events",
+      "icons": [{ "src": "icon-192.svg", "sizes": "192x192", "type": "image/svg+xml" }]
+    }
+  ]
 }

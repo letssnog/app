@@ -4,6 +4,7 @@ import { api, fileUrl } from "@/lib/api";
 import { LogOut, Crown, Pencil, ShieldCheck, X, Star, ChevronUp, Camera, Save, Plus } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
+import { motion } from "framer-motion";
 import {
   PRONOUN_OPTIONS, SMOKE_OPTIONS, DRINK_OPTIONS, WORKOUT_OPTIONS,
   HAS_KIDS, WANTS_KIDS, RELIGIONS, ZODIACS, EDUCATION
@@ -34,14 +35,26 @@ export default function Profile() {
         : <ProfileView user={user}/>}
 
       {/* Premium upsell */}
-      <div className="mt-6 relative overflow-hidden rounded-3xl border border-snog-pink/30 bg-gradient-to-br from-snog-pink/15 via-snog-navy to-snog-ink p-5">
+      <motion.div className="mt-6 relative overflow-hidden rounded-3xl border border-snog-pink/30 bg-gradient-to-br from-snog-pink/15 via-snog-navy to-snog-ink p-5 premium-card"
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2 }}>
         <Crown className="absolute right-4 top-4 h-6 w-6 text-snog-pink"/>
         <div className="text-xs font-semibold uppercase tracking-widest text-snog-pink">Snog Premium · coming soon</div>
         <div className="mt-1 font-display text-xl font-black">£4.99/mo · £39/yr</div>
         <p className="mt-2 text-xs text-white/70">Unlimited daily matches, extra event slots, profile boost, see who liked you. Free core stays free, forever.</p>
-      </div>
+        <ul className="mt-3 space-y-1 text-xs text-white/80">
+          <li>• 3 priority boosts per week</li>
+          <li>• Advanced filters and intent badges</li>
+          <li>• Early access to premium events</li>
+        </ul>
+        <button
+          className="btn-primary mt-3 px-4 py-2 text-xs"
+          onClick={() => toast.success("Premium waitlist joined. We'll ping you first.")}
+        >
+          Join premium waitlist
+        </button>
+      </motion.div>
 
-      <div className="mt-4 rounded-3xl border border-white/10 p-4 text-xs text-white/60">
+      <div className="mt-4 rounded-3xl border border-white/10 p-4 text-xs text-white/60 premium-card">
         <div className="flex items-center gap-2"><ShieldCheck className="h-4 w-4 text-snog-cyan"/> Always meet in public, share the safety link with a mate.</div>
       </div>
     </div>

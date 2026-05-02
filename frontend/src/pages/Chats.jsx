@@ -4,6 +4,7 @@ import { api, fileUrl } from "@/lib/api";
 import { MessageCircleHeart, Clock, Check, X } from "lucide-react";
 import { toast } from "sonner";
 import { motion, AnimatePresence } from "framer-motion";
+import { Pressable } from "@/components/PremiumMotion";
 
 export default function Chats() {
   const [threads, setThreads] = useState([]);
@@ -43,12 +44,12 @@ export default function Chats() {
             <span className="grid h-5 w-5 place-items-center rounded-full bg-snog-pink/20">{requests.incoming.length}</span>
             Date requests
           </div>
-          <div className="space-y-2">
+            <div className="space-y-2">
             <AnimatePresence>
             {requests.incoming.map((r) => (
               <motion.div key={r.request_id}
                 initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} exit={{ opacity: 0, x: -20 }}
-                className="glass relative overflow-hidden rounded-3xl p-4">
+                className="glass premium-card relative overflow-hidden rounded-3xl p-4">
                 <div className="flex items-center gap-3">
                   <div className="h-14 w-14 overflow-hidden rounded-2xl bg-white/10 shrink-0">
                     {r.other.photos?.[0] && <img src={fileUrl(r.other.photos[0])} className="h-full w-full object-cover" alt=""/>}
@@ -65,8 +66,8 @@ export default function Chats() {
                 </div>
                 {r.message && <div className="mt-2 rounded-xl bg-white/5 px-3 py-2 text-xs italic">“{r.message}”</div>}
                 <div className="mt-3 flex gap-2">
-                  <button onClick={()=>respond(r.request_id, false)} data-testid={`dr-decline-${r.request_id}`} className="btn-ghost flex-1 py-2 text-xs"><X className="mr-1 inline h-3.5 w-3.5"/>Decline</button>
-                  <button onClick={()=>respond(r.request_id, true)} data-testid={`dr-accept-${r.request_id}`} className="btn-primary flex-1 py-2 text-xs"><Check className="mr-1 inline h-3.5 w-3.5"/>Yes please</button>
+                  <Pressable onClick={()=>respond(r.request_id, false)} data-testid={`dr-decline-${r.request_id}`} className="btn-ghost flex-1 py-2 text-xs"><X className="mr-1 inline h-3.5 w-3.5"/>Decline</Pressable>
+                  <Pressable onClick={()=>respond(r.request_id, true)} data-testid={`dr-accept-${r.request_id}`} className="btn-primary flex-1 py-2 text-xs"><Check className="mr-1 inline h-3.5 w-3.5"/>Yes please</Pressable>
                 </div>
               </motion.div>
             ))}
@@ -103,7 +104,7 @@ export default function Chats() {
         )}
         {threads.map((t) => (
           <Link key={t.match_id} to={`/chats/${t.match_id}`} data-testid={`chat-row-${t.match_id}`}
-            className="glass flex items-center gap-3 rounded-2xl p-3 transition-colors hover:bg-white/[0.06]">
+            className="glass premium-card flex items-center gap-3 rounded-2xl p-3 transition-colors hover:bg-white/[0.06]">
             <div className="h-14 w-14 overflow-hidden rounded-2xl bg-white/10">
               {t.other.photos?.[0] && <img src={fileUrl(t.other.photos[0])} alt="" className="h-full w-full object-cover"/>}
             </div>

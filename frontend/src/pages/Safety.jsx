@@ -46,6 +46,14 @@ export default function Safety() {
             </div>
           </div>
         </div>
+        <div className="mt-4 rounded-3xl border border-white/10 bg-white/[0.03] p-4 text-xs text-white/75">
+          <div className="mb-2 font-semibold uppercase tracking-widest text-snog-cyan">Safety checklist</div>
+          <ul className="space-y-1.5">
+            <li>• Meet in a public venue and keep your phone charged.</li>
+            <li>• Share your live location with someone you trust.</li>
+            <li>• If plans change, ask your friend to confirm a check-in time.</li>
+          </ul>
+        </div>
         <p className="mt-6 text-center text-xs text-white/40">Sent with love by Let's Snog · letssnog.co.uk</p>
       </div>
     </div>

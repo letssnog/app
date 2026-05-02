@@ -4,6 +4,7 @@ import { CalendarDays, Users, Sparkles } from "lucide-react";
 import { Link } from "react-router-dom";
 import { toast } from "sonner";
 import { useAuth } from "@/context/AuthContext";
+import { motion } from "framer-motion";
 
 export default function Events() {
   const { user } = useAuth();
@@ -51,7 +52,8 @@ export default function Events() {
           const dt = new Date(e.starts_at);
           const isLive = e.status === "live";
           return (
-            <div key={e.event_id} className="glass relative overflow-hidden rounded-3xl p-5">
+            <motion.div key={e.event_id} className="glass premium-card relative overflow-hidden rounded-3xl p-5"
+              initial={{ opacity: 0, y: 10 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.2, ease: [0.22,1,0.36,1] }}>
               <div className="flex items-start justify-between gap-3">
                 <div>
                   <div className="text-xs font-semibold uppercase tracking-widest text-snog-pink">
@@ -86,7 +88,7 @@ export default function Events() {
                   <button onClick={()=>startEvt(e)} className="btn-ghost px-4" data-testid={`evt-${e.event_id}-start`}>Start</button>
                 )}
               </div>
-            </div>
+            </motion.div>
           );
         })}
       </div>

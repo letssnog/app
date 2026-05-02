@@ -1,11 +1,12 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useCallback, useEffect, useMemo, useRef, useState } from "react";
 import { useParams, Link, useNavigate } from "react-router-dom";
 import { api, fileUrl } from "@/lib/api";
 import { useAuth } from "@/context/AuthContext";
 import { ArrowLeft, Send, MapPin, CalendarPlus, ShieldCheck, Copy, MoreVertical, Flag, Ban, Wand2 } from "lucide-react";
 import { toast } from "sonner";
-import { REPORT_REASONS } from "@/lib/options";
 import SnogAIIcebreaker from "@/components/SnogAIIcebreaker";
+import ReportUserModal from "@/components/ReportUserModal";
+import { motion } from "framer-motion";
 
 export default function ChatThread() {
   const { matchId } = useParams();
@@ -17,18 +18,24 @@ export default function ChatThread() {
   const [feedbackOpen, setFeedbackOpen] = useState(false);
   const [menuOpen, setMenuOpen] = useState(false);
   const [reportOpen, setReportOpen] = useState(false);
+  const [reportMessage, setReportMessage] = useState(null);
   const [aiOpen, setAiOpen] = useState(false);
   const scrollerRef = useRef(null);
+  const quickReplies = [
+    "How's your week going?",
+    "What's your ideal first date in London?",
+    "Fancy a coffee or a walk this weekend?",
+  ];
 
-  const load = async () => {
+  const load = useCallback(async () => {
     const { data } = await api.get(`/chat/threads/${matchId}/messages`);
     setData(data);
     if (data.gate?.gated) {
       const fb = data.gate.feedback || {};
       if (!fb[user?.user_id]) setFeedbackOpen(true);
     }
-  };
-  useEffect(() => { load(); const id = setInterval(load, 4000); return ()=>clearInterval(id); }, [matchId]);
+  }, [matchId, user?.user_id]);
+  useEffect(() => { load(); const id = setInterval(load, 4000); return ()=>clearInterval(id); }, [load]);
 
   useEffect(() => {
     scrollerRef.current?.scrollTo({ top: scrollerRef.current.scrollHeight });
@@ -55,7 +62,8 @@ export default function ChatThread() {
   return (
     <div className="flex h-[calc(100svh-100px)] flex-col">
       {/* Header */}
-      <div className="glass flex items-center gap-3 rounded-2xl p-3 relative">
+      <motion.div className="glass premium-card flex items-center gap-3 rounded-2xl p-3 relative"
+        initial={{ opacity: 0, y: 8 }} animate={{ opacity: 1, y: 0 }} transition={{ duration: 0.18 }}>
         <Link to="/chats" className="text-white/70" data-testid="chat-back"><ArrowLeft className="h-5 w-5"/></Link>
         <div className="h-11 w-11 overflow-hidden rounded-xl bg-white/10">
           {other?.photos?.[0] && <img src={fileUrl(other.photos[0])} className="h-full w-full object-cover" alt=""/>}
@@ -84,38 +92,75 @@ export default function ChatThread() {
             </button>
           </div>
         )}
-      </div>
+      </motion.div>
 
       {/* Messages */}
-      <div ref={scrollerRef} className="mt-3 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 scroll-hide">
+      <div ref={scrollerRef} className="mt-3 flex-1 space-y-2 overflow-y-auto rounded-2xl bg-white/[0.03] p-3 scroll-hide premium-card">
         {data.messages.length === 0 && (
           <p className="text-center text-xs text-white/40 mt-10">Be the first to say something cheeky.</p>
         )}
         {data.messages.map((m) => {
           const mine = m.sender_id === user?.user_id;
+          const canReportMessage = !mine && !m.system && other?.user_id;
           return (
-            <div key={m.id} className={`flex ${mine ? "justify-end" : "justify-start"}`}>
-              <div className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-snog-pink text-white" : "bg-white/10 text-white"}`}>
+            <div key={m.id} className={`group flex gap-1 ${mine ? "justify-end" : "justify-start"}`}>
+              <div
+                className={`max-w-[80%] rounded-2xl px-3 py-2 text-sm ${mine ? "bg-snog-pink text-white" : "bg-white/10 text-white"}`}
+              >
                 {m.body}
               </div>
+              {canReportMessage && (
+                <button
+                  type="button"
+                  title="Report message"
+                  data-testid={`report-msg-${m.id}`}
+                  onClick={() =>
+                    setReportMessage({ id: m.id, body: m.body, senderId: m.sender_id })
+                  }
+                  className="grid h-8 w-8 shrink-0 place-items-center self-center rounded-lg text-white/35 opacity-0 transition hover:bg-white/10 hover:text-snog-pink group-hover:opacity-100"
+                >
+                  <Flag className="h-3.5 w-3.5" />
+                </button>
+              )}
             </div>
           );
         })}
       </div>
 
       {/* Composer */}
+      {user?.is_restricted && (
+        <p className="mt-2 rounded-xl border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-center text-xs text-amber-100">
+          Your account can&apos;t send messages right now. If you think this is wrong, contact support.
+        </p>
+      )}
+
       {data.match.chat_open && !data.gate?.gated ? (
-        <form onSubmit={send} className="mt-2 flex items-center gap-2">
+        <>
+          <div className="mt-2 flex gap-2 overflow-x-auto pb-1 scroll-hide">
+            {quickReplies.map((text) => (
+              <button
+                key={text}
+                type="button"
+                onClick={() => setBody(text)}
+                className="shrink-0 rounded-full border border-white/15 bg-white/5 px-3 py-1.5 text-[11px] text-white/80 hover:border-snog-cyan hover:text-snog-cyan"
+              >
+                {text}
+              </button>
+            ))}
+          </div>
+          <form onSubmit={send} className="mt-2 flex items-center gap-2">
           <button type="button" onClick={()=>setAiOpen(true)} data-testid="ai-icebreaker-open"
             className="grid h-11 w-11 shrink-0 place-items-center rounded-full bg-gradient-to-br from-snog-pink to-snog-cyan text-white shadow-[0_0_18px_-6px_rgba(255,42,133,0.6)]"
             title="Snog AI icebreaker">
             <Wand2 className="h-4 w-4"/>
           </button>
           <input data-testid="chat-input" value={body} onChange={(e)=>setBody(e.target.value)}
-            placeholder="Type a message…"
-            className="flex-1 rounded-full border border-white/10 bg-white/8 px-4 py-2.5 outline-none focus:border-snog-pink"/>
-          <button data-testid="chat-send" className="grid h-11 w-11 place-items-center rounded-full bg-snog-pink"><Send className="h-4 w-4"/></button>
-        </form>
+            placeholder={user?.is_restricted ? "Sending disabled" : "Type a message…"}
+            disabled={!!user?.is_restricted}
+            className="flex-1 rounded-full border border-white/10 bg-white/8 px-4 py-2.5 outline-none focus:border-snog-pink disabled:opacity-45"/>
+          <button data-testid="chat-send" disabled={!!user?.is_restricted} className="grid h-11 w-11 place-items-center rounded-full bg-snog-pink disabled:opacity-45"><Send className="h-4 w-4"/></button>
+          </form>
+        </>
       ) : data.gate?.gated && !feedbackOpen ? (
         <button onClick={()=>setFeedbackOpen(true)} className="btn-primary mt-2">Submit post-date feedback</button>
       ) : (
@@ -126,39 +171,23 @@ export default function ChatThread() {
 
       {planOpen && <PlanDateModal matchId={matchId} onClose={()=>{ setPlanOpen(false); load(); }}/>}
       {feedbackOpen && <FeedbackModal matchId={matchId} onClose={()=>{ setFeedbackOpen(false); load(); }}/>}
-      {reportOpen && <ReportModal otherId={other?.user_id} matchId={matchId} onClose={()=>setReportOpen(false)}/>}
+      {reportOpen && (
+        <ReportUserModal
+          reportedUserId={other?.user_id}
+          matchId={matchId}
+          onClose={() => setReportOpen(false)}
+        />
+      )}
+      {reportMessage && (
+        <ReportUserModal
+          reportedUserId={reportMessage.senderId}
+          matchId={matchId}
+          messageId={reportMessage.id}
+          messagePreview={reportMessage.body}
+          onClose={() => setReportMessage(null)}
+        />
+      )}
     </div>
-  );
-}
-
-function ReportModal({ otherId, matchId, onClose }) {
-  const [reason, setReason] = useState(REPORT_REASONS[0]);
-  const [detail, setDetail] = useState("");
-  const submit = async () => {
-    try {
-      await api.post("/reports", { reported_user_id: otherId, match_id: matchId, reason, detail });
-      toast.success("Report sent. Our team will review.");
-      onClose();
-    } catch { toast.error("Report failed"); }
-  };
-  return (
-    <Modal onClose={onClose}>
-      <h2 className="font-display text-2xl font-black">Report user</h2>
-      <p className="text-xs text-white/60 mt-1">Tell us what's up. Reports are private.</p>
-      <div className="mt-3">
-        <div className="mb-1.5 text-xs uppercase tracking-wider text-white/60">Reason</div>
-        <div className="flex flex-wrap gap-1.5">
-          {REPORT_REASONS.map((r) => (
-            <button key={r} onClick={()=>setReason(r)} data-testid={`report-${r.replace(/\s+/g,'-').toLowerCase()}`}
-              className={`rounded-full border px-3 py-1.5 text-xs ${reason===r?"bg-snog-pink border-snog-pink":"border-white/15 text-white/70"}`}>{r}</button>
-          ))}
-        </div>
-      </div>
-      <textarea rows="3" maxLength="500" value={detail} onChange={(e)=>setDetail(e.target.value)}
-        placeholder="Anything else we should know?"
-        className="mt-3 w-full rounded-xl bg-white/5 border border-white/10 px-3 py-2 text-sm"/>
-      <button onClick={submit} data-testid="report-submit" className="btn-primary mt-4 w-full">Send report</button>
-    </Modal>
   );
 }
 

@@ -182,7 +182,7 @@ async def main():
             "has_kids": d["has_kids"], "wants_kids": d["wants_kids"],
             "religion": d["religion"], "zodiac": d["zodiac"],
             "dates_completed": 0, "premium": False,
-            "is_admin": False, "is_banned": False, "blocked_user_ids": [],
+            "is_admin": False, "is_banned": False, "is_restricted": False, "blocked_user_ids": [],
             "onboarding_complete": True,
             "created_at": (existing.get("created_at") if existing else datetime.now(timezone.utc).isoformat()),
         }

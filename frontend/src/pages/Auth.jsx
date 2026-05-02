@@ -4,6 +4,7 @@ import { Heart } from "lucide-react";
 import { toast } from "sonner";
 import { signIn, signUp, confirmSignUp, getIdTokenJwt } from "@/lib/cognito";
 import { useAuth } from "@/context/AuthContext";
+import { SectionTransition, Pressable } from "@/components/PremiumMotion";
 
 export default function Auth() {
   const nav = useNavigate();
@@ -35,11 +36,23 @@ export default function Auth() {
         setMode("confirm");
       } else if (mode === "confirm") {
         await confirmSignUp({ email, code });
+        // Expected UX: after successful verification, continue into onboarding flow.
+        if (password) {
+          const { session } = await signIn({ email, password });
+          const jwtFromSession = session?.getIdToken?.()?.getJwtToken?.();
+          const jwt = jwtFromSession || (await getIdTokenJwt());
+          if (jwt) localStorage.setItem("idTokenJwt", jwt);
+          await refresh();
+          nav("/onboarding", { replace: true });
+          return;
+        }
+
         toast.success("Verified. Now sign in.");
         setMode("signin");
       } else {
-        await signIn({ email, password });
-        const jwt = await getIdTokenJwt();
+        const { session } = await signIn({ email, password });
+        const jwtFromSession = session?.getIdToken?.()?.getJwtToken?.();
+        const jwt = jwtFromSession || (await getIdTokenJwt());
         if (jwt) localStorage.setItem("idTokenJwt", jwt);
         await refresh();
         // If onboarding isn't complete, route guard will push to onboarding.
@@ -70,30 +83,31 @@ export default function Auth() {
         </p>
 
         <div className="mt-6 flex justify-center gap-2">
-          <button
+          <Pressable
             type="button"
             onClick={() => setMode("signin")}
             className={`rounded-full px-4 py-2 text-sm border ${mode === "signin" ? "border-snog-pink bg-snog-pink/15" : "border-white/10 bg-white/5"}`}
           >
             Sign in
-          </button>
-          <button
+          </Pressable>
+          <Pressable
             type="button"
             onClick={() => setMode("signup")}
             className={`rounded-full px-4 py-2 text-sm border ${mode === "signup" ? "border-snog-pink bg-snog-pink/15" : "border-white/10 bg-white/5"}`}
           >
             Sign up
-          </button>
-          <button
+          </Pressable>
+          <Pressable
             type="button"
             onClick={() => setMode("confirm")}
             className={`rounded-full px-4 py-2 text-sm border ${mode === "confirm" ? "border-snog-cyan bg-snog-cyan/10" : "border-white/10 bg-white/5"}`}
           >
             Verify
-          </button>
+          </Pressable>
         </div>
 
-        <form onSubmit={onSubmit} className="mt-6 glass rounded-3xl p-5 space-y-3">
+        <SectionTransition sectionKey={mode}>
+        <form onSubmit={onSubmit} className="mt-6 glass rounded-3xl p-5 space-y-3 premium-card">
           <label className="block">
             <div className="mb-1 text-xs uppercase tracking-wider text-white/60">Email</div>
             <input
@@ -161,6 +175,7 @@ export default function Auth() {
             Back
           </button>
         </form>
+        </SectionTransition>
       </div>
     </div>
   );

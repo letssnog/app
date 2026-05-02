@@ -1,7 +1,16 @@
 import axios from "axios";
 
 const BACKEND_URL = process.env.REACT_APP_BACKEND_URL;
-export const API = `${BACKEND_URL}/api`;
+const normalizedBackend = BACKEND_URL?.replace(/\/+$/, "");
+const runningInBrowser = typeof window !== "undefined";
+const pageIsHttps = runningInBrowser && window.location.protocol === "https:";
+const backendIsHttp = normalizedBackend?.startsWith("http://");
+
+// Avoid mixed-content failures on production https pages:
+// if env backend URL is plain http, use same-origin /api rewrite instead.
+export const API = pageIsHttps && backendIsHttp
+  ? "/api"
+  : (normalizedBackend ? `${normalizedBackend}/api` : "/api");
 
 export const api = axios.create({
   baseURL: API,

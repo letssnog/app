@@ -11,8 +11,9 @@ export function AuthProvider({ children }) {
   const refresh = useCallback(async () => {
     try {
       const jwt = await getIdTokenJwt();
-      if (jwt) localStorage.setItem("idTokenJwt", jwt);
-      else localStorage.removeItem("idTokenJwt");
+      if (jwt) {
+        localStorage.setItem("idTokenJwt", jwt);
+      }
       const { data } = await api.get("/auth/me");
       setUser(data);
       return data;

@@ -1,8 +1,7 @@
 import "@/App.css";
-import { BrowserRouter, Routes, Route, Navigate, useLocation } from "react-router-dom";
+import { BrowserRouter, Routes, Route, Navigate, useLocation, Outlet } from "react-router-dom";
 import { AuthProvider, useAuth } from "@/context/AuthContext";
 import { Toaster } from "sonner";
-
 import Landing from "@/pages/Landing";
 import Auth from "@/pages/Auth";
 import Onboarding from "@/pages/Onboarding";
@@ -22,12 +21,15 @@ function ProtectedShell() {
   if (loading) return <div className="grid min-h-[100svh] place-items-center text-white/60">Loading…</div>;
   if (!user) return <Navigate to="/" replace state={{ from: loc }}/>;
   if (!user.onboarding_complete && loc.pathname !== "/onboarding") return <Navigate to="/onboarding" replace/>;
+  /* Admin portal: full-width layout, no mobile bottom nav */
+  if (loc.pathname.startsWith("/admin")) return <Outlet />;
   return <AppShell/>;
 }
 
 function RoutedApp() {
+  const location = useLocation();
   return (
-    <Routes>
+    <Routes location={location}>
       <Route path="/" element={<Landing/>}/>
       <Route path="/auth" element={<Auth/>}/>
       <Route path="/safety/:token" element={<Safety/>}/>

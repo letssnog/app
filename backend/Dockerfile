@@ -8,12 +8,16 @@ WORKDIR /app
 # System deps (minimal)
 RUN apt-get update && apt-get install -y --no-install-recommends \
     build-essential \
+    ca-certificates \
  && rm -rf /var/lib/apt/lists/*
 
 COPY requirements.txt /app/requirements.txt
 RUN pip install --no-cache-dir -r /app/requirements.txt
 
 COPY . /app
+
+# DocumentDB TLS trust bundle used by pymongo/motor connection string.
+COPY certs/global-bundle.pem /app/certs/global-bundle.pem
 
 EXPOSE 8000
 
